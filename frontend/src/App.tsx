@@ -1,122 +1,118 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from "react";
+import { BrowserProvider, Contract, JsonRpcProvider } from "ethers";
+import type { Eip1193Provider } from "ethers";
+import { ABI, CONTRACT_ADDRESS, RPC_URL } from "./contract";
+import { sha256File } from "./hash";
 
-function App() {
-  const [count, setCount] = useState(0)
+const eth = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+async function basculerSurHardhat() {
+  if (!eth) return;
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: "0x7a69" }], // 31337 en hexadécimal
+    });
+  } catch {
+    await eth.request({
+      method: "wallet_addEthereumChain",
+      params: [
+        {
+          chainId: "0x7a69",
+          chainName: "Hardhat Local",
+          rpcUrls: ["http://127.0.0.1:8545"],
+          nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+        },
+      ],
+    });
+  }
 }
 
-export default App
+function Institution() {
+  const [file, setFile] = useState<File | null>(null);
+  const [student, setStudent] = useState("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
+  const [uri, setUri] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function emettre() {
+    try {
+      if (!eth) return setMsg("MetaMask n'est pas installé.");
+      if (!file) return setMsg("Choisis d'abord le PDF du diplôme.");
+      setMsg("Calcul du hash...");
+      const hash = await sha256File(file);
+      await basculerSurHardhat();
+      const provider = new BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, ABI, signer);
+      setMsg("Confirme la transaction dans MetaMask...");
+      const tx = await contract.issueDiploma(student, hash, uri);
+      const receipt = await tx.wait();
+      let id = "?";
+      for (const log of receipt.logs) {
+        const parsed = contract.interface.parseLog(log);
+        if (parsed?.name === "Issued") id = parsed.args.diplomaId.toString();
+      }
+      setMsg(`✅ Diplôme émis. ID = ${id}\nHash = ${hash}`);
+    } catch (e) {
+      setMsg("❌ " + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  return (
+    <section>
+      <h2>Espace institution</h2>
+      <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <br />
+      <input style={{ width: "100%" }} placeholder="Adresse de l'étudiant" value={student} onChange={(e) => setStudent(e.target.value)} />
+      <br />
+      <input style={{ width: "100%" }} placeholder="URI des métadonnées (optionnel)" value={uri} onChange={(e) => setUri(e.target.value)} />
+      <br />
+      <button onClick={emettre}>Émettre le diplôme</button>
+      <pre style={{ whiteSpace: "pre-wrap" }}>{msg}</pre>
+    </section>
+  );
+}
+
+function Verificateur() {
+  const [file, setFile] = useState<File | null>(null);
+  const [msg, setMsg] = useState("");
+
+  async function verifier() {
+    try {
+      if (!file) return setMsg("Choisis le PDF à vérifier.");
+      const hash = await sha256File(file);
+      const provider = new JsonRpcProvider(RPC_URL); // lecture seule, sans wallet
+      const contract = new Contract(CONTRACT_ADDRESS, ABI, provider);
+      const id: bigint = await contract.getIdByHash(hash);
+      if (id === 0n) return setMsg("❌ Invalide : ce PDF n'est pas enregistré.");
+      const [valid, issuer, issuedAt, revoked] = await contract.verify(id, hash);
+      if (revoked) setMsg(`⚠️ Diplôme révoqué (ID ${id})`);
+      else if (valid)
+        setMsg(`✅ Valide (ID ${id})\nÉmetteur : ${issuer}\nDate : ${new Date(Number(issuedAt) * 1000).toLocaleString()}`);
+      else setMsg("❌ Invalide");
+    } catch (e) {
+      setMsg("❌ " + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  return (
+    <section>
+      <h2>Vérification publique</h2>
+      <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <br />
+      <button onClick={verifier}>Vérifier</button>
+      <pre style={{ whiteSpace: "pre-wrap" }}>{msg}</pre>
+    </section>
+  );
+}
+
+export default function App() {
+  return (
+    <main style={{ maxWidth: 700, margin: "2rem auto", textAlign: "left", padding: "0 1rem" }}>
+      <h1>DiplomaRegistry</h1>
+      <Institution />
+      <hr />
+      <Verificateur />
+    </main>
+  );
+}
