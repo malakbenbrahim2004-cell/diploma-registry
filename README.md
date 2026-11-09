@@ -1,57 +1,78 @@
-# Sample Hardhat 3 Project (`mocha` and `ethers`)
+# DiplomaRegistry : émission et vérification de diplômes sur blockchain
 
-This project showcases a Hardhat 3 project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+Projet de fin de module « Technologie Blockchain », ENSA Fès.
+Équipe : Ton Nom, Camarade 2, Camarade 3.
 
-To learn more about Hardhat 3, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3](https://hardhat.org/hardhat3-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Principe
 
-## Project Overview
+Le hash SHA-256 du PDF d'un diplôme est ancré sur la blockchain par une institution autorisée.
+Un tiers peut vérifier l'authenticité d'un diplôme en chargeant le PDF : aucune donnée personnelle
+n'est stockée on-chain (RGPD), uniquement des hash, des adresses et des identifiants.
 
-This example project includes:
+## Architecture
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+- `contracts/DiplomaRegistry.sol` : smart contract (Solidity 0.8.34, OpenZeppelin AccessControl)
+- `test/DiplomaRegistry.ts` : 18 tests Hardhat (couverture 100 %)
+- `scripts/` : scripts de déploiement (local et Sepolia)
+- `frontend/` : dApp React + Vite + ethers.js (institution, étudiant, vérificateur, historique)
 
-## Usage
+## Prérequis
 
-### Running Tests
+- Node.js 20 ou plus
+- MetaMask
+- Git
 
-To run all the tests in the project, execute the following command:
+## Installation
 
-```shell
+```
+git clone <URL_DU_DEPOT>
+cd diploma-registry
+npm install
+cd frontend
+npm install --legacy-peer-deps
+```
+
+## Tests et couverture
+
+```
 npx hardhat test
+npx hardhat test --coverage
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+## Exécution en local (démo reproductible)
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
-```
+1. Terminal 1 : `npx hardhat node`
+2. Terminal 2 : `npx hardhat run scripts/deploy.ts --network localhost`
+3. Copier l'adresse du contrat dans `frontend/src/contract.ts` (`CONTRACT_ADDRESS`, `RPC_URL = "http://127.0.0.1:8545"`).
+4. Dans `frontend/src/App.tsx`, mettre l'identifiant de chaîne `0x7a69` (Hardhat Local) dans la fonction `basculerSurSepolia`.
+5. Terminal 3 : `cd frontend && npm run dev`, puis ouvrir http://localhost:5173
+6. MetaMask : ajouter le réseau Hardhat Local (RPC http://127.0.0.1:8545, chaîne 31337) et importer le compte #1 (émetteur).
 
-### Make a deployment to Sepolia
+## Déploiement Sepolia
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+1. `npx hardhat keystore set SEPOLIA_RPC_URL` et `npx hardhat keystore set SEPOLIA_PRIVATE_KEY`
+2. `npx hardhat run scripts/deploy-sepolia.ts --network sepolia`
+3. Mettre l'adresse obtenue dans `frontend/src/contract.ts`.
 
-To run the deployment to a local chain:
+Contrat déployé : `0x766D687300c05894B0395B35a46A5746cEFa6817` (Sepolia).
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
-```
+## Fonctionnalités
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+| Réf. | Fonction |
+|---|---|
+| F1 | `issueDiploma` : ancrage du hash |
+| F2 | `revokeDiploma` : révocation avec motif |
+| F3 | `verify` : vérification publique |
+| F4 | Contrôle d'accès (rôle ISSUER_ROLE) |
+| F5 | Événements Issued et Revoked |
+| F6 | Interface institution (hash SHA-256 côté client) |
+| F7 | Espace étudiant et QR code |
+| F8 | Vérification publique par PDF ou QR |
+| F9 | Historique des émissions |
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+## Sécurité
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-```
-
-After setting the variable, you can run the deployment with the Sepolia network:
-
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+- Contrôle d'accès par rôles (AccessControl) ; seul l'émetteur d'origine ou l'admin peut révoquer.
+- Aucun appel externe dans le contrat : pas de réentrance possible.
+- Validation des entrées (adresse nulle, hash vide, doublon) avec des erreurs personnalisées.
+- Rotation de clé : `revokeRole` puis `grantRole`.
